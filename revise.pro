@@ -1,0 +1,3 @@
+
+
+ARRAY = ARRAY[ REVISE (SORT(ARRAY) ]

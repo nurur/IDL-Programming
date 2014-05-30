@@ -1,0 +1,178 @@
+
+PRO AZIMUTH, IMAGE, HEADER, RAD, DR,           $
+             IMSIZE=IMSIZE, PIXSCALE=PIXSCALE, $ 
+             DIM, XX,YY,ZZ, AZM_IND=AZM_IND, PHI=PHI, APF=APF
+;
+;
+; +
+; NAME: 
+;               AZIMUTH
+; PURPOSE:
+;              FIND AZIMUTHAL ANGLE IN A 2D ARRAY
+; EXPLANATION:
+;            
+;
+; INPUTS:
+;              XX - ONE DIMENSIONAL ARRAY SHOWING THE POSITION X
+;              YY - ONE DIMENSIONAL ARRAY SHOWING THE POSITION Y
+;              ZZ - ONE DIMENSIONAL ARRAY SHOWING THE FUNCTION VALUE
+;                   AT {X,Y}
+;
+; OUTPUTS:
+;             PHI - SORTED (INCREASING ORDER) AZIMUTHAL ANGLE
+;             APF - AZIMUTHAL PROFILE 
+;                   FUNCTIONAL (ZZ) VALUES AT THE AZIMUTHAL ANGLE, PHI 
+;
+;
+; -
+ON_ERROR, 2
+COMPILE_OPT IDL2
+
+;PRINT, HEADER
+
+if N_PARAMS() EQ 0 then $
+     message,'Syntax -   out =  AZIMUTH, IMAGE, RADIUS, DR', /NoName
+
+ s = size(IMAGE)
+ if ( s[0] NE 2 ) then $
+     message,'Input IMAGE must be 2 dimensional'
+;
+;
+;
+; PART 1
+; EXTRACT PARAMETERS
+;
+;
+;
+; SIZE OF THE IMAGE 
+IF KEYWORD_SET(IMSIZE) THEN BEGIN 
+    NAXES    = FLTARR(2)
+
+    NAXES[0] = IMSIZE
+    NAXES[1] = IMSIZE
+ENDIF ELSE BEGIN 
+    NAXES    = SXPAR(header, 'NAXIS*')
+ENDELSE
+;
+;
+;
+; CENTER OFTHE IMAGE 
+IF KEYWORD_SET(PIXSCALE) THEN BEGIN 
+    PIXSCALE = PIXSCALE
+ENDIF ELSE BEGIN
+    
+    PIXSCALE = SXPAR(HEADER, 'CDELT1')
+    IF (PIXSCALE EQ 0) THEN BEGIN
+        PRINT, 'PARAMETER "CRDELT1" IS NOT ASSIGNED'
+        PIXSCALE = SXPAR(HEADER, 'CD1_1')
+    ENDIF
+
+; PIXEL IN ARCSEC
+PIXSCALE = ABS(PIXSCALE) * 3600. 
+ENDELSE
+;
+;
+;
+; CENTER OF THE IMAGE
+CENTER  = ROUND((NAXES)/2)
+
+
+
+; PART 2
+; CONSTRUCT CIRCULAR IMAGE USING DIST_CIRCLE
+; CIRCLE IN PIXEL
+DIST_CIRCLE, CIRCLE, NAXES[0:1], CENTER[0], CENTER[1]  
+;
+; CIRCLE IN ARCSEC
+CIRCLE   = CIRCLE * PIXSCALE                      
+;
+AZM_IND  = WHERE(CIRCLE GT RAD AND CIRCLE LE RAD+DR, NIND)
+;
+; LOCATIONS OF THE POINTS
+POS = ARRAY_INDICES(IMAGE, AZM_IND)
+;
+; RELATIVE POSITONS FROM THE CENTER
+XX  = FLOAT(POS[0,*] - CENTER[0]) 
+YY  = FLOAT(POS[1,*] - CENTER[1])
+;
+; FUNCTIONAL VALUE
+ZZ  = IMAGE[AZM_IND]  
+
+
+
+; PART 3
+; CHANGE OF VARIABLE 
+DIM = NIND
+;
+;; DEFINE WORKING ARRAY (1D)
+ANG = FLTARR(DIM)
+FUN = FLTARR(DIM)
+;
+;; DEFINE ARRAY WITH RETURNED VALUES
+PHI = FLTARR(DIM)
+APF = FLTARR(DIM)
+
+
+
+; PART 4
+;; CONSTRUCT AZIMUTHAL ANGLES 
+FOR i=0L, DIM-1 DO BEGIN 
+    
+    ;; FIRST QUADRANT
+    IF (XX[i] GT 0. AND YY[i] GE 0.) THEN BEGIN 
+        ANG[i] = ATAN( (YY[i]/XX[i]) ) * 180./!DPI
+        FUN[i] = ZZ[i]
+    ENDIF
+    
+    ;; SECOND QUADRANT
+    IF (XX[i] LT 0. AND YY[i] GE 0.) THEN BEGIN 
+        ANG[i] = ATAN( (YY[i]/XX[i]) ) * 180./!DPI
+        ANG[i] = ANG[i] + 180.
+
+        FUN[i] = ZZ[i]
+    ENDIF
+    
+    ;; THIRD QUADRANT
+    IF (XX[i] LT 0. AND YY[i] LT 0.) THEN BEGIN 
+        ANG[i] = ATAN( (YY[i]/XX[i]) ) * 180./!DPI
+        ANG[i] = ANG[i] + 180.
+
+        FUN[i] = ZZ[i]
+    ENDIF
+
+    ;; FOURTH QUADRANT
+    IF (XX[i] GT 0. AND YY[i] LT 0.) THEN BEGIN 
+        ANG[i] = ATAN( (YY[i]/XX[i]) ) * 180./!DPI
+        ANG[i] = ANG[i] + 360.
+
+        FUN[i] = ZZ[i]
+    ENDIF
+
+    
+    ;; SPECIAL CASES
+    ;; 90 DEGREE
+    IF (XX[i] EQ 0. AND YY[i] GT 0.) THEN BEGIN 
+        ANG[i] = 0.5 * 180.
+
+        FUN[i] = ZZ[i]
+    ENDIF
+
+    ;; 270 DEGREE
+    IF (XX[i] EQ 0. AND YY[i] LT 0.) THEN BEGIN 
+        ANG[i]= 1.5 * 180.
+
+        FUN[i]= ZZ[i]
+    ENDIF
+
+ENDFOR
+
+
+
+; PART 5
+;; SORT OUT THE ANGLES (IN INCREASING ORDER) 
+;; RETURN SORTED VALUES
+PHI    = ANG[SORT(ANG)]
+APF    = FUN[SORT(ANG)]
+
+
+END
